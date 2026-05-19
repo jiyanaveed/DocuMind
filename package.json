@@ -3,9 +3,11 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "turbo dev",
-    "build": "turbo build",
-    "lint": "turbo lint"
+    "dev": "pnpm exec turbo dev",
+    "build": "pnpm exec turbo build",
+    "lint": "pnpm exec turbo lint",
+    "dev:api": "pnpm --filter api dev",
+    "dev:web": "pnpm --filter web dev"
   },
   "devDependencies": {
     "turbo": "^2.9.14"

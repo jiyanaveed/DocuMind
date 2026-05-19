@@ -52,27 +52,21 @@ pnpm install
 cp .env.example apps/api/.env
 cp .env.example apps/web/.env.local
 # Fill in the env values — see §6 for what each variable means
+
+pnpm dev
 ```
 
-Then start each app in a separate terminal:
+`pnpm dev` runs `pnpm exec turbo dev` under the hood, which starts both apps in parallel. `pnpm exec` ensures turbo is always resolved from `node_modules/.bin` regardless of your shell PATH.
 
-**Terminal 1 — API:**
+- **API** → `http://localhost:3001`
+- **Web** → `http://localhost:3000`
+
+To start apps individually:
 
 ```bash
-cd apps/api
-pnpm dev
-# Runs on http://localhost:3001
+pnpm dev:api   # API only  (http://localhost:3001)
+pnpm dev:web   # Web only  (http://localhost:3000)
 ```
-
-**Terminal 2 — Frontend:**
-
-```bash
-cd apps/web
-pnpm dev
-# Runs on http://localhost:3000
-```
-
-> **Note on `turbo dev`:** `pnpm turbo dev` from the project root should work if `turbo` is in your PATH. If you get `command not found`, use the two-terminal approach above, or run `pnpm exec turbo dev` from the root.
 
 ---
 
@@ -185,7 +179,7 @@ AI_EMBEDDING_MODEL=togethercomputer/m2-bert-80M-8k-retrieval
 
 ### Monorepo with Turborepo
 
-`@repo/types` defines the TypeScript interfaces (`Document`, `Message`, `Conversation`, `CreateDocumentDto`, etc.) that are shared between the NestJS backend and the Next.js frontend. Without a monorepo, these would either be duplicated or published as a separate npm package. Turborepo handles build ordering (`"dependsOn": ["^build"]`) so `packages/types` and `packages/ai-provider` are compiled before the apps that consume them. In development, each app is started separately (`cd apps/api && pnpm dev`, `cd apps/web && pnpm dev`); `pnpm exec turbo dev` from the root also works if `turbo` is in your PATH.
+`@repo/types` defines the TypeScript interfaces (`Document`, `Message`, `Conversation`, `CreateDocumentDto`, etc.) that are shared between the NestJS backend and the Next.js frontend. Without a monorepo, these would either be duplicated or published as a separate npm package. Turborepo handles build ordering (`"dependsOn": ["^build"]`) so `packages/types` and `packages/ai-provider` are compiled before the apps that consume them. The root `pnpm dev` script uses `pnpm exec turbo dev`, which resolves turbo from `node_modules/.bin` and starts all packages concurrently.
 
 ### Chunking Strategy
 
