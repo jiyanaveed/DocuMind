@@ -52,24 +52,27 @@ pnpm install
 cp .env.example apps/api/.env
 cp .env.example apps/web/.env.local
 # Fill in the env values — see §6 for what each variable means
-
-pnpm turbo dev
 ```
 
-This starts both apps concurrently:
+Then start each app in a separate terminal:
 
-- **API** → `http://localhost:3001`
-- **Web** → `http://localhost:3000`
-
-To run them separately:
+**Terminal 1 — API:**
 
 ```bash
-# Terminal 1
-cd apps/api && pnpm dev
-
-# Terminal 2
-cd apps/web && pnpm dev
+cd apps/api
+pnpm dev
+# Runs on http://localhost:3001
 ```
+
+**Terminal 2 — Frontend:**
+
+```bash
+cd apps/web
+pnpm dev
+# Runs on http://localhost:3000
+```
+
+> **Note on `turbo dev`:** `pnpm turbo dev` from the project root should work if `turbo` is in your PATH. If you get `command not found`, use the two-terminal approach above, or run `pnpm exec turbo dev` from the root.
 
 ---
 
@@ -182,7 +185,7 @@ AI_EMBEDDING_MODEL=togethercomputer/m2-bert-80M-8k-retrieval
 
 ### Monorepo with Turborepo
 
-`@repo/types` defines the TypeScript interfaces (`Document`, `Message`, `Conversation`, `CreateDocumentDto`, etc.) that are shared between the NestJS backend and the Next.js frontend. Without a monorepo, these would either be duplicated or published as a separate npm package. Turborepo runs `pnpm turbo dev` to start both apps in parallel and handles build ordering (`"dependsOn": ["^build"]`) so `packages/types` and `packages/ai-provider` are compiled before the apps that consume them.
+`@repo/types` defines the TypeScript interfaces (`Document`, `Message`, `Conversation`, `CreateDocumentDto`, etc.) that are shared between the NestJS backend and the Next.js frontend. Without a monorepo, these would either be duplicated or published as a separate npm package. Turborepo handles build ordering (`"dependsOn": ["^build"]`) so `packages/types` and `packages/ai-provider` are compiled before the apps that consume them. In development, each app is started separately (`cd apps/api && pnpm dev`, `cd apps/web && pnpm dev`); `pnpm exec turbo dev` from the root also works if `turbo` is in your PATH.
 
 ### Chunking Strategy
 
