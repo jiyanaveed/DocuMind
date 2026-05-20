@@ -122,6 +122,7 @@ export class ChatService implements OnModuleInit {
     const aiResponse = await this.aiProvider.chat(aiMessages);
 
     if (aiResponse.usage) {
+      this.logger.log(`Saving token usage: prompt=${aiResponse.usage.prompt_tokens} completion=${aiResponse.usage.completion_tokens} total=${aiResponse.usage.total_tokens}`);
       this.db
         .query(
           `INSERT INTO token_usage
