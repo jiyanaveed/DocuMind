@@ -1,0 +1,32 @@
+services:
+  - type: web
+    name: documind-api
+    runtime: node
+    rootDir: apps/api
+    buildCommand: pnpm install && pnpm build
+    startCommand: pnpm start:prod
+    envVars:
+      - key: NODE_VERSION
+        value: 20.11.0
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_JWT_SECRET
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: AI_PROVIDER
+        sync: false
+      - key: AI_BASE_URL
+        sync: false
+      - key: AI_API_KEY
+        sync: false
+      - key: AI_MODEL
+        sync: false
+      - key: AI_EMBEDDING_MODEL
+        sync: false
+      - key: FRONTEND_URL
+        sync: false

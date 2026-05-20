@@ -4,7 +4,9 @@
   "private": true,
   "scripts": {
     "dev": "ts-node -r tsconfig-paths/register src/main.ts",
-    "build": "tsc",
+    "build": "nest build",
+    "start": "node dist/main.js",
+    "start:prod": "node dist/main.js",
     "lint": "echo 'No lint configured'"
   },
   "dependencies": {
