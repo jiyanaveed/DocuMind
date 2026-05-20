@@ -32,12 +32,19 @@ export default function NewDocumentPage() {
     }
 
     setUploadState({ status: 'uploading', filename: file.name });
+
+    console.log('[upload] Starting upload...');
+    console.log('[upload] File:', file.name, file.type || '(no mime type)', file.size, 'bytes');
+    console.log('[upload] API URL:', process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001 (fallback)');
+
     try {
       const result = await uploadFile(file);
+      console.log('[upload] Success:', result.title);
       setTitle(result.title);
       setContent(result.text);
       setUploadState({ status: 'done', filename: file.name });
     } catch (err) {
+      console.error('[upload] Error:', err);
       setUploadState({
         status: 'error',
         message: err instanceof Error ? err.message : 'Failed to extract text',

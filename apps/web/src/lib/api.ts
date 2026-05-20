@@ -16,15 +16,29 @@ export async function uploadFile(file: File): Promise<{ title: string; text: str
     headers['Authorization'] = `Bearer ${session.access_token}`;
   }
 
-  const response = await fetch(`${API_BASE}/upload`, {
-    method: 'POST',
-    headers,
-    body: form,
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}/upload`, {
+      method: 'POST',
+      headers,
+      body: form,
+    });
+  } catch (networkErr) {
+    throw new Error(
+      `Cannot reach API at ${API_BASE} — is the server running? (${(networkErr as Error).message})`,
+    );
+  }
 
   if (!response.ok) {
     const body = await response.text();
-    throw new Error(body || `Upload failed: ${response.status}`);
+    let message = `Upload failed: ${response.status}`;
+    try {
+      const json = JSON.parse(body);
+      message = json.message ?? message;
+    } catch {
+      if (body) message = body;
+    }
+    throw new Error(message);
   }
 
   return response.json();
