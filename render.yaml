@@ -3,7 +3,7 @@ services:
     name: documind-api
     runtime: node
     rootDir: apps/api
-    buildCommand: pnpm install && pnpm build
+    buildCommand: pnpm install && pnpm --filter @repo/types build && pnpm --filter @repo/ai-provider build && pnpm --filter api build
     startCommand: pnpm start:prod
     envVars:
       - key: NODE_VERSION
