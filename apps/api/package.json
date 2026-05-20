@@ -43,9 +43,12 @@
     "@types/passport-jwt": "^4.0.0",
     "@types/pdf-parse": "^1.1.5",
     "@types/pg": "^8.0.0",
+    "@types/webpack-node-externals": "^3.0.4",
     "@types/ws": "^8.18.1",
+    "ts-loader": "^9.5.7",
     "ts-node": "^10.9.0",
     "tsconfig-paths": "^4.2.0",
-    "typescript": "^5.0.0"
+    "typescript": "^5.0.0",
+    "webpack-node-externals": "^3.0.0"
   }
 }
