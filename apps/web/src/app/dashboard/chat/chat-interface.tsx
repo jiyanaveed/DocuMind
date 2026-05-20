@@ -2,10 +2,13 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Conversation, Message } from '@repo/types';
+import { createClient } from '@/lib/supabase/client';
 import { apiRequest } from '@/lib/api';
 import ConversationList from './conversation-list';
 import MessageThread, { type UIMessage, type SourceChunk } from './message-thread';
 import MessageInput from './message-input';
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
 interface ChatApiResponse {
   message: Message;
@@ -34,8 +37,12 @@ export default function ChatInterface() {
   const [loadingConversations, setLoadingConversations] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [sending, setSending] = useState(false);
+  const [streaming, setStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const dismissError = useCallback(() => setError(null), []);
+  // Keep a stable ref to activeConvId so async handlers always read the current value
+  const activeConvIdRef = useRef<string | null>(null);
+  activeConvIdRef.current = activeConvId;
 
   useEffect(() => {
     apiRequest<Conversation[]>('/chat/conversations')
@@ -74,50 +81,108 @@ export default function ChatInterface() {
     setMessages([]);
   }
 
-  async function handleSend(text: string) {
+  async function handleSend(inputText: string) {
     setSending(true);
 
-    const optimisticId = `optimistic-${Date.now()}`;
-    const optimisticMsg: UIMessage = {
-      id: optimisticId,
-      conversation_id: activeConvId ?? '',
-      role: 'user',
-      content: text,
-      created_at: new Date().toISOString(),
-    };
-    setMessages((prev) => [...prev, optimisticMsg]);
+    const userMsgId = `optimistic-${Date.now()}`;
+    const streamingMsgId = `streaming-${Date.now()}`;
+
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: userMsgId,
+        conversation_id: activeConvIdRef.current ?? '',
+        role: 'user' as const,
+        content: inputText,
+        created_at: new Date().toISOString(),
+      },
+    ]);
 
     try {
-      const response = await apiRequest<ChatApiResponse>('/chat/message', {
+      const supabase = createClient();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      const response = await fetch(`${API_BASE}/chat/message/stream`, {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
         body: JSON.stringify({
-          message: text,
-          conversation_id: activeConvId ?? undefined,
+          message: inputText,
+          conversation_id: activeConvIdRef.current ?? undefined,
         }),
       });
 
-      const assistantMsg: UIMessage = {
-        ...response.message,
-        role: 'assistant',
-        source_chunks: response.source_chunks,
-      };
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
+      // Add empty assistant placeholder and switch to streaming mode
       setMessages((prev) => [
-        ...prev.filter((m) => m.id !== optimisticId),
-        { ...optimisticMsg, conversation_id: response.conversation_id },
-        assistantMsg,
+        ...prev,
+        {
+          id: streamingMsgId,
+          conversation_id: activeConvIdRef.current ?? '',
+          role: 'assistant' as const,
+          content: '',
+          created_at: new Date().toISOString(),
+        },
       ]);
+      setSending(false);
+      setStreaming(true);
 
-      if (!activeConvId) {
-        setActiveConvId(response.conversation_id);
-        const updatedConvs = await apiRequest<Conversation[]>('/chat/conversations');
-        setConversations(updatedConvs);
+      const reader = response.body!.getReader();
+      const decoder = new TextDecoder();
+      let assistantContent = '';
+
+      outer: while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const decoded = decoder.decode(value, { stream: true });
+        const lines = decoded.split('\n\n').filter(Boolean);
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          let data: Record<string, unknown>;
+          try {
+            data = JSON.parse(line.slice(6)) as Record<string, unknown>;
+          } catch {
+            continue;
+          }
+
+          if (typeof data.content === 'string') {
+            assistantContent += data.content;
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === streamingMsgId ? { ...m, content: assistantContent } : m,
+              ),
+            );
+          }
+
+          if (data.done === true) {
+            const convId = typeof data.conversation_id === 'string' ? data.conversation_id : '';
+            if (!activeConvIdRef.current && convId) {
+              setActiveConvId(convId);
+              apiRequest<Conversation[]>('/chat/conversations')
+                .then(setConversations)
+                .catch(() => {});
+            }
+            break outer;
+          }
+
+          if (typeof data.error === 'string') {
+            throw new Error(data.error);
+          }
+        }
       }
     } catch (err) {
-      setMessages((prev) => prev.filter((m) => m.id !== optimisticId));
+      setMessages((prev) => prev.filter((m) => m.id !== userMsgId && m.id !== streamingMsgId));
       setError(err instanceof Error ? err.message : 'Failed to send message');
-    } finally {
       setSending(false);
+    } finally {
+      setStreaming(false);
     }
   }
 
@@ -144,7 +209,7 @@ export default function ChatInterface() {
         ) : (
           <MessageThread messages={messages} loading={loadingMessages} typing={sending} />
         )}
-        <MessageInput onSend={handleSend} sending={sending} disabled={false} />
+        <MessageInput onSend={handleSend} sending={sending || streaming} disabled={false} />
       </div>
 
       {error && <ErrorToast message={error} onDismiss={dismissError} />}

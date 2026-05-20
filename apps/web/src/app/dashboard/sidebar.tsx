@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 const NAV_ITEMS = [
   { href: '/dashboard/documents', label: 'Documents' },
   { href: '/dashboard/chat', label: 'Chat' },
+  { href: '/dashboard/usage', label: 'Usage' },
 ];
 
 export default function Sidebar() {

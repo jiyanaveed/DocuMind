@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Header, Param, Post, Res, UseGuards } from '@nestjs/common';
+import type { Response } from 'express';
 import { JwtAuthGuard } from '../auth/auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { ChatMessageDto } from './dto/chat-message.dto';
@@ -17,6 +18,40 @@ export class ChatController {
   @Post('message')
   sendMessage(@Body() dto: ChatMessageDto, @CurrentUser() user: AuthUser) {
     return this.chatService.sendMessage(user.userId, dto);
+  }
+
+  @Post('message/stream')
+  @Header('Content-Type', 'text/event-stream')
+  @Header('Cache-Control', 'no-cache')
+  @Header('Connection', 'keep-alive')
+  async streamMessage(
+    @Body() dto: ChatMessageDto,
+    @CurrentUser() user: AuthUser,
+    @Res() res: Response,
+  ) {
+    res.flushHeaders();
+
+    let conversationId = dto.conversation_id ?? '';
+
+    try {
+      let fullContent = '';
+      for await (const chunk of this.chatService.streamMessage(
+        user.userId,
+        dto,
+        (id) => { conversationId = id; },
+      )) {
+        fullContent += chunk;
+        res.write(`data: ${JSON.stringify({ content: chunk })}\n\n`);
+      }
+
+      res.write(
+        `data: ${JSON.stringify({ done: true, conversation_id: conversationId, source_chunks: [] })}\n\n`,
+      );
+    } catch (err) {
+      res.write(`data: ${JSON.stringify({ error: (err as Error).message })}\n\n`);
+    } finally {
+      res.end();
+    }
   }
 
   @Get('conversations')

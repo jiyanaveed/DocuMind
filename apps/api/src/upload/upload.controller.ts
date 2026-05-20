@@ -16,6 +16,7 @@ const ALLOWED_MIME_TYPES = new Set([
   'application/pdf',
   'application/msword',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'text/plain',
 ]);
 
 @UseGuards(JwtAuthGuard)
@@ -34,13 +35,17 @@ export class UploadController {
 
     if (!ALLOWED_MIME_TYPES.has(file.mimetype)) {
       throw new BadRequestException(
-        'Unsupported file type. Please upload a PDF (.pdf) or Word document (.doc, .docx).',
+        'Unsupported file type. Please upload a PDF, Word document, or plain text file.',
       );
     }
 
     const title = file.originalname.replace(/\.[^/.]+$/, '');
 
     try {
+      if (file.mimetype === 'text/plain') {
+        return { title, text: file.buffer.toString('utf-8') };
+      }
+
       if (file.mimetype === 'application/pdf') {
         const data = await pdfParse(file.buffer);
         return { title, text: data.text };

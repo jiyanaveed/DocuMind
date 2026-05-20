@@ -7,6 +7,7 @@ import { DocumentsModule } from './documents/documents.module';
 import { HealthController } from './health/health.controller';
 import { SupabaseModule } from './supabase/supabase.module';
 import { UploadModule } from './upload/upload.module';
+import { UsageModule } from './usage/usage.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { UploadModule } from './upload/upload.module';
     DocumentsModule,
     ChatModule,
     UploadModule,
+    UsageModule,
   ],
   controllers: [HealthController],
 })

@@ -16,7 +16,7 @@ export interface SourceChunk {
   similarity: number;
 }
 
-export interface ChatResponse {
+export interface SendMessageResult {
   message: Message;
   source_chunks: SourceChunk[];
   conversation_id: string;
@@ -66,20 +66,46 @@ export class ChatService implements OnModuleInit {
     return conv!;
   }
 
-  async sendMessage(userId: string, dto: ChatMessageDto): Promise<ChatResponse> {
-    const conversation = await this.createOrGetConversation(
-      userId,
-      dto.conversation_id,
-      dto.message,
-    );
+  private buildAiMessages(
+    systemContent: string,
+    history: Message[],
+    userMessage: string,
+  ): ChatMessage[] {
+    return [
+      { role: 'system', content: systemContent },
+      ...history.map((m): ChatMessage => ({
+        role: m.role as 'user' | 'assistant',
+        content: m.content,
+      })),
+      { role: 'user', content: userMessage },
+    ];
+  }
 
-    // Load history before saving the new message so it doesn't appear twice in context
-    const historyRows = await this.db.query<Message>(
+  private buildSystemContent(sourceChunks: SourceChunk[]): string {
+    const contextSection =
+      sourceChunks.length > 0
+        ? sourceChunks.map((c) => `[${c.document_title}]: ${c.content}`).join('\n\n')
+        : 'No relevant context found in your documents.';
+
+    return (
+      `You are a helpful assistant. Answer the user's question using ONLY the context below. ` +
+      `If the answer isn't in the context, say so. Cite which document each piece of information comes from.\n\n` +
+      `Context:\n${contextSection}`
+    );
+  }
+
+  private async loadHistory(conversationId: string): Promise<Message[]> {
+    return this.db.query<Message>(
       `SELECT * FROM (
          SELECT * FROM messages WHERE conversation_id = $1 ORDER BY created_at DESC LIMIT 10
        ) sub ORDER BY created_at ASC`,
-      [conversation.id],
+      [conversationId],
     );
+  }
+
+  async sendMessage(userId: string, dto: ChatMessageDto): Promise<SendMessageResult> {
+    const conversation = await this.createOrGetConversation(userId, dto.conversation_id, dto.message);
+    const history = await this.loadHistory(conversation.id);
 
     await this.db.query(
       'INSERT INTO messages (conversation_id, role, content) VALUES ($1, $2, $3)',
@@ -87,31 +113,35 @@ export class ChatService implements OnModuleInit {
     );
 
     const sourceChunks = await this.embeddingsService.similaritySearch(dto.message, userId, 5);
+    const aiMessages = this.buildAiMessages(
+      this.buildSystemContent(sourceChunks),
+      history,
+      dto.message,
+    );
 
-    const contextSection =
-      sourceChunks.length > 0
-        ? sourceChunks.map((c) => `[${c.document_title}]: ${c.content}`).join('\n\n')
-        : 'No relevant context found in your documents.';
+    const aiResponse = await this.aiProvider.chat(aiMessages);
 
-    const systemContent =
-      `You are a helpful assistant. Answer the user's question using ONLY the context below. ` +
-      `If the answer isn't in the context, say so. Cite which document each piece of information comes from.\n\n` +
-      `Context:\n${contextSection}`;
-
-    const aiMessages: ChatMessage[] = [
-      { role: 'system', content: systemContent },
-      ...historyRows.map((m): ChatMessage => ({
-        role: m.role as 'user' | 'assistant',
-        content: m.content,
-      })),
-      { role: 'user', content: dto.message },
-    ];
-
-    const assistantContent = await this.aiProvider.chat(aiMessages);
+    if (aiResponse.usage) {
+      this.db
+        .query(
+          `INSERT INTO token_usage
+           (user_id, conversation_id, model, prompt_tokens, completion_tokens, total_tokens)
+           VALUES ($1, $2, $3, $4, $5, $6)`,
+          [
+            userId,
+            conversation.id,
+            this.config.get('AI_MODEL') ?? 'gpt-4o-mini',
+            aiResponse.usage.prompt_tokens,
+            aiResponse.usage.completion_tokens,
+            aiResponse.usage.total_tokens,
+          ],
+        )
+        .catch((err) => this.logger.error('Failed to save token usage', err));
+    }
 
     const assistantMessage = await this.db.queryOne<Message>(
       'INSERT INTO messages (conversation_id, role, content) VALUES ($1, $2, $3) RETURNING *',
-      [conversation.id, 'assistant', assistantContent],
+      [conversation.id, 'assistant', aiResponse.content],
     );
 
     return {
@@ -119,6 +149,44 @@ export class ChatService implements OnModuleInit {
       source_chunks: sourceChunks,
       conversation_id: conversation.id,
     };
+  }
+
+  async *streamMessage(
+    userId: string,
+    dto: ChatMessageDto,
+    onReady: (conversationId: string) => void,
+  ): AsyncIterable<string> {
+    const conversation = await this.createOrGetConversation(userId, dto.conversation_id, dto.message);
+    const history = await this.loadHistory(conversation.id);
+
+    await this.db.query(
+      'INSERT INTO messages (conversation_id, role, content) VALUES ($1, $2, $3)',
+      [conversation.id, 'user', dto.message],
+    );
+
+    const sourceChunks = await this.embeddingsService.similaritySearch(dto.message, userId, 5);
+    const aiMessages = this.buildAiMessages(
+      this.buildSystemContent(sourceChunks),
+      history,
+      dto.message,
+    );
+
+    onReady(conversation.id);
+
+    let fullContent = '';
+    try {
+      for await (const chunk of this.aiProvider.chatStream(aiMessages)) {
+        fullContent += chunk;
+        yield chunk;
+      }
+    } finally {
+      if (fullContent) {
+        await this.db.queryOne<Message>(
+          'INSERT INTO messages (conversation_id, role, content) VALUES ($1, $2, $3) RETURNING *',
+          [conversation.id, 'assistant', fullContent],
+        );
+      }
+    }
   }
 
   async listConversations(userId: string): Promise<Conversation[]> {

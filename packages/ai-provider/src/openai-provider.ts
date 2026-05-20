@@ -1,5 +1,5 @@
 import OpenAI from 'openai';
-import type { AIProvider, ChatMessage, ChatOptions } from './types';
+import type { AIProvider, AIChatResponse, ChatMessage, ChatOptions } from './types';
 
 export class OpenAIProvider implements AIProvider {
   private readonly client: OpenAI;
@@ -12,14 +12,39 @@ export class OpenAIProvider implements AIProvider {
     this.embeddingModel = embeddingModel;
   }
 
-  async chat(messages: ChatMessage[], options?: ChatOptions): Promise<string> {
+  async chat(messages: ChatMessage[], options?: ChatOptions): Promise<AIChatResponse> {
     const response = await this.client.chat.completions.create({
       model: this.model,
       messages,
-      temperature: options?.temperature,
-      max_tokens: options?.maxTokens,
+      temperature: options?.temperature ?? 0.7,
+      max_tokens: options?.maxTokens ?? 1000,
     });
-    return response.choices[0]?.message?.content ?? '';
+
+    return {
+      content: response.choices[0]?.message?.content ?? '',
+      usage: response.usage
+        ? {
+            prompt_tokens: response.usage.prompt_tokens,
+            completion_tokens: response.usage.completion_tokens,
+            total_tokens: response.usage.total_tokens,
+          }
+        : undefined,
+    };
+  }
+
+  async *chatStream(messages: ChatMessage[], options?: ChatOptions): AsyncIterable<string> {
+    const stream = await this.client.chat.completions.create({
+      model: this.model,
+      messages,
+      temperature: options?.temperature ?? 0.7,
+      max_tokens: options?.maxTokens ?? 1000,
+      stream: true,
+    });
+
+    for await (const chunk of stream) {
+      const content = chunk.choices[0]?.delta?.content;
+      if (content) yield content;
+    }
   }
 
   async embed(text: string): Promise<number[]> {
