@@ -1,5 +1,5 @@
 import OpenAI from 'openai';
-import type { AIProvider, AIChatResponse, ChatMessage, ChatOptions } from './types';
+import type { AIProvider, AIChatResponse, ChatMessage, ChatOptions, UsageData } from './types';
 
 export class OpenAIProvider implements AIProvider {
   private readonly client: OpenAI;
@@ -32,18 +32,30 @@ export class OpenAIProvider implements AIProvider {
     };
   }
 
-  async *chatStream(messages: ChatMessage[], options?: ChatOptions): AsyncIterable<string> {
+  async *chatStream(
+    messages: ChatMessage[],
+    options?: ChatOptions,
+    onUsage?: (usage: UsageData) => void,
+  ): AsyncIterable<string> {
     const stream = await this.client.chat.completions.create({
       model: this.model,
       messages,
       temperature: options?.temperature ?? 0.7,
       max_tokens: options?.maxTokens ?? 1000,
       stream: true,
+      stream_options: { include_usage: true },
     });
 
     for await (const chunk of stream) {
       const content = chunk.choices[0]?.delta?.content;
       if (content) yield content;
+      if (chunk.usage && onUsage) {
+        onUsage({
+          prompt_tokens: chunk.usage.prompt_tokens,
+          completion_tokens: chunk.usage.completion_tokens,
+          total_tokens: chunk.usage.total_tokens,
+        });
+      }
     }
   }
 

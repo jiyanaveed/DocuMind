@@ -176,7 +176,24 @@ export class ChatService implements OnModuleInit {
 
     let fullContent = '';
     try {
-      for await (const chunk of this.aiProvider.chatStream(aiMessages)) {
+      for await (const chunk of this.aiProvider.chatStream(aiMessages, undefined, (usage) => {
+        this.logger.log(`Saving token usage: prompt=${usage.prompt_tokens} completion=${usage.completion_tokens} total=${usage.total_tokens}`);
+        this.db
+          .query(
+            `INSERT INTO token_usage
+             (user_id, conversation_id, model, prompt_tokens, completion_tokens, total_tokens)
+             VALUES ($1, $2, $3, $4, $5, $6)`,
+            [
+              userId,
+              conversation.id,
+              this.config.get('AI_MODEL') ?? 'gpt-4o-mini',
+              usage.prompt_tokens,
+              usage.completion_tokens,
+              usage.total_tokens,
+            ],
+          )
+          .catch((err) => this.logger.error('Failed to save token usage', err));
+      })) {
         fullContent += chunk;
         yield chunk;
       }

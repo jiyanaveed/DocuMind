@@ -18,8 +18,18 @@ export interface AIChatResponse {
   };
 }
 
+export type UsageData = {
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+};
+
 export interface AIProvider {
   chat(messages: ChatMessage[], options?: ChatOptions): Promise<AIChatResponse>;
-  chatStream(messages: ChatMessage[], options?: ChatOptions): AsyncIterable<string>;
+  chatStream(
+    messages: ChatMessage[],
+    options?: ChatOptions,
+    onUsage?: (usage: UsageData) => void,
+  ): AsyncIterable<string>;
   embed(text: string): Promise<number[]>;
 }
