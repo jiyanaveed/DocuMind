@@ -24,10 +24,10 @@ export default function NewDocumentPage() {
   const router = useRouter();
 
   async function handleFile(file: File) {
-    const allowed = ['.pdf', '.doc', '.docx'];
+    const allowed = ['.pdf', '.doc', '.docx', '.txt'];
     const ext = '.' + file.name.split('.').pop()?.toLowerCase();
     if (!allowed.includes(ext)) {
-      setUploadState({ status: 'error', message: 'Only PDF and Word files are supported.' });
+      setUploadState({ status: 'error', message: 'Only PDF, Word, and plain text files are supported.' });
       return;
     }
 
@@ -167,14 +167,14 @@ export default function NewDocumentPage() {
                       />
                     </svg>
                     <span className="text-sm text-[var(--muted)]">
-                      Drop a PDF or Word file here, or{' '}
+                      Drop a file here, or{' '}
                       <span className="text-[var(--black)] font-semibold">click to browse</span>
                     </span>
                     <span
                       style={{ fontFamily: 'var(--font-dm-mono)' }}
                       className="text-xs text-[var(--muted2)]"
                     >
-                      .pdf, .doc, .docx — max 10 MB
+                      .pdf, .doc, .docx, .txt — max 10 MB
                     </span>
                     {uploadState.status === 'error' && (
                       <p className="text-xs text-red-600 mt-1">{uploadState.message}</p>
@@ -184,7 +184,7 @@ export default function NewDocumentPage() {
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept=".pdf,.doc,.docx"
+                  accept=".pdf,.doc,.docx,.txt,text/plain"
                   className="sr-only"
                   onChange={handleInputChange}
                 />
