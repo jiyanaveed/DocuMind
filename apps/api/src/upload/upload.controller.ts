@@ -41,18 +41,26 @@ export class UploadController {
 
     const title = file.originalname.replace(/\.[^/.]+$/, '');
 
+    const sanitizeText = (text: string): string =>
+      text
+        .replace(/\x00/g, '')
+        .replace(/[\x01-\x08]/g, '')
+        .replace(/[\x0B\x0C]/g, '')
+        .replace(/[\x0E-\x1F]/g, '')
+        .trim();
+
     try {
       if (file.mimetype === 'text/plain') {
-        return { title, text: file.buffer.toString('utf-8') };
+        return { title, text: sanitizeText(file.buffer.toString('utf-8')) };
       }
 
       if (file.mimetype === 'application/pdf') {
         const data = await pdfParse(file.buffer);
-        return { title, text: data.text };
+        return { title, text: sanitizeText(data.text) };
       }
 
       const result = await mammoth.extractRawText({ buffer: file.buffer });
-      return { title, text: result.value };
+      return { title, text: sanitizeText(result.value) };
     } catch {
       throw new InternalServerErrorException('Failed to extract text from file');
     }

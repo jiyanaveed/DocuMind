@@ -22,10 +22,14 @@ export class DocumentsService {
     return doc;
   }
 
+  private sanitizeText(text: string): string {
+    return text.replace(/\x00/g, '').replace(/[\x01-\x08\x0B\x0C\x0E-\x1F]/g, '').trim();
+  }
+
   async create(userId: string, dto: CreateDocumentDto): Promise<Document> {
     const doc = await this.db.queryOne<Document>(
       'INSERT INTO documents (user_id, title, content, tags) VALUES ($1, $2, $3, $4) RETURNING *',
-      [userId, dto.title, dto.content, dto.tags ?? []],
+      [userId, dto.title, this.sanitizeText(dto.content), dto.tags ?? []],
     );
     return doc!;
   }
@@ -37,7 +41,7 @@ export class DocumentsService {
       'UPDATE documents SET title=$1, content=$2, tags=$3, updated_at=NOW() WHERE id=$4 AND user_id=$5 RETURNING *',
       [
         dto.title ?? existing.title,
-        dto.content ?? existing.content,
+        dto.content != null ? this.sanitizeText(dto.content) : existing.content,
         dto.tags ?? existing.tags,
         id,
         userId,
