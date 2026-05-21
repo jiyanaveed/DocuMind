@@ -4,7 +4,10 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { apiRequest } from '@/lib/api';
+import { createClient } from '@/lib/supabase/client';
 import type { Document, UpdateDocumentDto } from '@repo/types';
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
 export default function DocumentEditForm({ document }: { document: Document }) {
   const [title, setTitle] = useState(document.title);
@@ -42,36 +45,41 @@ export default function DocumentEditForm({ document }: { document: Document }) {
   }
 
   async function handleDelete() {
-    if (!confirm('Delete this document? This cannot be undone.')) return;
+    if (!confirm('Are you sure you want to delete this document? This cannot be undone.')) return;
     setDeleting(true);
+    setError('');
 
     try {
-      await apiRequest(`/documents/${document.id}`, { method: 'DELETE' });
-      router.push('/dashboard/documents');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete document');
+      const supabase = createClient();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      const res = await fetch(`${API_BASE}/documents/${document.id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${session?.access_token}` },
+      });
+
+      if (res.ok) {
+        router.push('/dashboard/documents');
+      } else {
+        setError('Failed to delete document');
+        setDeleting(false);
+      }
+    } catch {
+      setError('Failed to delete document');
       setDeleting(false);
     }
   }
 
   return (
     <div className="max-w-2xl">
-      <div className="flex items-center justify-between mb-1">
-        <h1
-          style={{ fontFamily: 'var(--font-dm-serif)' }}
-          className="text-3xl font-normal text-[var(--black)]"
-        >
-          Edit Document
-        </h1>
-        <button
-          type="button"
-          onClick={handleDelete}
-          disabled={deleting}
-          className="btn-danger"
-        >
-          {deleting ? 'Deleting…' : 'Delete'}
-        </button>
-      </div>
+      <h1
+        style={{ fontFamily: 'var(--font-dm-serif)' }}
+        className="text-3xl font-normal text-[var(--black)] mb-1"
+      >
+        Edit Document
+      </h1>
       <p
         style={{ fontFamily: 'var(--font-dm-mono)' }}
         className="text-xs text-[var(--muted2)] mb-6 space-x-3"
@@ -129,6 +137,9 @@ export default function DocumentEditForm({ document }: { document: Document }) {
           <Link href="/dashboard/documents" className="btn-outline">
             Cancel
           </Link>
+          <button type="button" onClick={handleDelete} disabled={deleting} className="btn-danger">
+            {deleting ? 'Deleting…' : 'Delete'}
+          </button>
         </div>
       </form>
     </div>

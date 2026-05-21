@@ -3,12 +3,16 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { apiRequest } from '@/lib/api';
+import { createClient } from '@/lib/supabase/client';
 import type { Document } from '@repo/types';
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
 export default function DocumentsPage() {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     apiRequest<Document[]>('/documents')
@@ -16,6 +20,33 @@ export default function DocumentsPage() {
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
+
+  async function handleDelete(e: React.MouseEvent, id: string) {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (!confirm('Are you sure you want to delete this document? This cannot be undone.')) return;
+
+    setDeletingId(id);
+
+    try {
+      const supabase = createClient();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      const res = await fetch(`${API_BASE}/documents/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${session?.access_token}` },
+      });
+
+      if (res.ok) {
+        setDocuments((prev) => prev.filter((d) => d.id !== id));
+      }
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   const filtered = search
     ? documents.filter(
@@ -92,30 +123,66 @@ export default function DocumentsPage() {
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((doc) => (
-            <Link key={doc.id} href={`/dashboard/documents/${doc.id}`} className="doc-card block p-4">
-              <div className="font-medium text-[var(--black)] leading-snug line-clamp-2 mb-2">
-                {doc.title}
-              </div>
-              {doc.tags.length > 0 && (
-                <div className="flex flex-wrap gap-1 mb-3">
-                  {doc.tags.map((tag) => (
-                    <span
-                      key={tag}
-                      style={{ fontFamily: 'var(--font-dm-mono)' }}
-                      className="px-1.5 py-0.5 text-xs bg-[var(--off-white)] border border-[var(--border)] rounded text-[var(--muted)]"
-                    >
-                      {tag}
-                    </span>
-                  ))}
+            <div key={doc.id} className="relative">
+              <Link href={`/dashboard/documents/${doc.id}`} className="doc-card block p-4">
+                <div className="font-medium text-[var(--black)] leading-snug line-clamp-2 mb-2 pr-6">
+                  {doc.title}
                 </div>
-              )}
-              <div
-                style={{ fontFamily: 'var(--font-dm-mono)' }}
-                className="text-xs text-[var(--muted2)]"
+                {doc.tags.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mb-3">
+                    {doc.tags.map((tag) => (
+                      <span
+                        key={tag}
+                        style={{ fontFamily: 'var(--font-dm-mono)' }}
+                        className="px-1.5 py-0.5 text-xs bg-[var(--off-white)] border border-[var(--border)] rounded text-[var(--muted)]"
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <div
+                  style={{ fontFamily: 'var(--font-dm-mono)' }}
+                  className="text-xs text-[var(--muted2)]"
+                >
+                  {new Date(doc.updated_at).toLocaleDateString()}
+                </div>
+              </Link>
+              <button
+                type="button"
+                onClick={(e) => handleDelete(e, doc.id)}
+                disabled={deletingId === doc.id}
+                aria-label="Delete document"
+                className="absolute top-2 right-2 p-1 rounded text-[var(--muted2)] hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-40"
               >
-                {new Date(doc.updated_at).toLocaleDateString()}
-              </div>
-            </Link>
+                {deletingId === doc.id ? (
+                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    />
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8v8H4z"
+                    />
+                  </svg>
+                ) : (
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={1.5}
+                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                    />
+                  </svg>
+                )}
+              </button>
+            </div>
           ))}
         </div>
       )}
