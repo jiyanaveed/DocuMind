@@ -8,16 +8,21 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   const allowedOrigins = [
+    'https://docu-mind-web-kappa.vercel.app',
     'http://localhost:3000',
-    process.env.FRONTEND_URL,
-  ].filter(Boolean) as string[];
-
-  console.log('CORS allowed origins:', allowedOrigins);
+    'http://localhost:3001',
+  ];
 
   app.enableCors({
-    origin: allowedOrigins,
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, origin ?? true);
+      } else {
+        callback(new Error(`CORS blocked: ${origin}`));
+      }
+    },
     credentials: true,
-    methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
   });
 
